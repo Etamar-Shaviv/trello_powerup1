@@ -34,11 +34,8 @@
       <div id="status" class="muted">Enter your Trello API key & token (read access).</div>
       <div id="result"></div>
     </div>
-
     <script>
       const t = TrelloPowerUp.iframe();
-
-      // Load stored creds from board-private storage, else localStorage fallback.
       async function loadCreds() {
         const stored = await t.get('board', 'private', 'trelloAuth');
         if (stored && stored.key && stored.token) return stored;
@@ -49,7 +46,6 @@
         } catch {}
         return { key: '', token: '' };
       }
-
       async function saveCreds(key, token) {
         await t.set('board', 'private', 'trelloAuth', { key, token });
         try {
@@ -57,10 +53,9 @@
           localStorage.setItem('trello_token', token);
         } catch {}
       }
-
       function parseNumbersAfterGt(text) {
         if (!text) return [];
-        const re = />\s*(-?\d+(?:\.\d+)?)/g; // matches > 123 or >-5.5
+        const re = />\s*(-?\d+(?:\.\d+)?)/g;
         const out = [];
         let m;
         while ((m = re.exec(text)) !== null) {
@@ -69,7 +64,6 @@
         }
         return out;
       }
-
       async function fetchJSON(url) {
         const res = await fetch(url);
         if (!res.ok) {
@@ -78,7 +72,6 @@
         }
         return res.json();
       }
-
       async function run() {
         const status = document.getElementById('status');
         const result = document.getElementById('result');
@@ -94,25 +87,15 @@
             status.innerHTML = '<span class="err">Missing key/token. Provide your Trello API credentials.</span>';
             return;
           }
-          // Persist for next time
           await saveCreds(key, token);
-
-          // Fetch lists to map id -> name
           const lists = await fetchJSON(`https://api.trello.com/1/boards/${boardId}/lists?fields=name&key=${key}&token=${token}`);
           const listNameById = Object.fromEntries(lists.map(l => [l.id, l.name]));
-
-          // Fetch all cards (name, desc, list)
           const cards = await fetchJSON(`https://api.trello.com/1/boards/${boardId}/cards?fields=name,desc,idList,url&limit=1000&key=${key}&token=${token}`);
-
           let grand = 0;
           const perList = new Map();
           const rows = [];
-
           for (const c of cards) {
-            const nums = [
-              ...parseNumbersAfterGt(c.name),
-              ...parseNumbersAfterGt(c.desc)
-            ];
+            const nums = [...parseNumbersAfterGt(c.name), ...parseNumbersAfterGt(c.desc)];
             if (nums.length > 0) {
               const sum = nums.reduce((a,b)=>a+b,0);
               grand += sum;
@@ -121,8 +104,6 @@
               rows.push({ listName, card: c.name, url: c.url, values: nums, sum });
             }
           }
-
-          // Render results
           const tbl = document.createElement('table');
           tbl.innerHTML = '<thead><tr><th>List</th><th>Card</th><th class="mono">Values</th><th class="mono">Card Sum</th></tr></thead>';
           const tb = document.createElement('tbody');
@@ -133,35 +114,30 @@
             tb.appendChild(tr);
           }
           tbl.appendChild(tb);
-          result.appendChild(tbl);
-
-          // Totals
           const totals = document.createElement('div');
           totals.className = 'totals';
           const listLines = [...perList.entries()].map(([ln, s]) => `${ln}: <span class="mono">${s.toFixed(2)}</span>`).join(' • ');
           totals.innerHTML = `<div class="ok">Grand Total: <span class="mono">${grand.toFixed(2)}</span></div><div class="muted">By list — ${listLines || 'No matches found.'}</div>`;
-          result.appendChild(totals);
-
+          const resultFrag = document.createDocumentFragment();
+          resultFrag.appendChild(tbl);
+          resultFrag.appendChild(totals);
+          result.appendChild(resultFrag);
           status.textContent = 'Done.';
         } catch (err) {
           document.getElementById('status').innerHTML = '<span class="err">' + (err && err.message ? err.message : err) + '</span>';
         }
       }
-
-      // Wire up UI
       (async () => {
         const creds = await loadCreds();
         document.getElementById('key').value = creds.key || '';
         document.getElementById('token').value = creds.token || '';
       })();
-
       document.getElementById('save').addEventListener('click', async () => {
         const key = document.getElementById('key').value.trim();
         const token = document.getElementById('token').value.trim();
         await saveCreds(key, token);
         document.getElementById('status').textContent = 'Saved.';
       });
-
       document.getElementById('run').addEventListener('click', run);
     </script>
   </body>

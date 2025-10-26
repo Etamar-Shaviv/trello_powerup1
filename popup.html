@@ -22,7 +22,7 @@
         t.closePopup();
       });
       t.getContext().then(ctx => {
-        document.getElementById('info').textContent = `✅ Workspace: ${ctx.enterprise || 'n/a'} • Board: ${ctx.board} • User: ${ctx.member}`;
+        document.getElementById('info').textContent = `✅ Board: ${ctx.board} • User: ${ctx.member}`;
       });
     </script>
   </body>

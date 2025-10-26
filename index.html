@@ -8,25 +8,40 @@
     <style>
       html, body { height: 100%; margin: 0; font-family: system-ui, sans-serif; }
       .wrap { display:flex; align-items:center; justify-content:center; height:100%; color:#555; }
-      .hint { max-width: 560px; padding: 24px; text-align:center; }
+      .hint { max-width: 680px; padding: 24px; text-align:center; }
       code { background:#f4f4f4; padding:2px 6px; border-radius:6px; }
+      .warn { color:#b00020; font-weight:600; }
     </style>
   </head>
   <body>
     <div class="wrap">
       <div class="hint">
         <h1>🔌 Trello Power‑Up — Connected</h1>
-        <p>This page registers capabilities via <code>TrelloPowerUp.initialize</code>.</p>
+        <p>If you opened this page directly, some console warnings are expected.<br/>
+        The board buttons appear only when Trello loads this page in an iframe.</p>
+        <p class="warn" id="outsideHint" style="display:none">
+          You’re viewing the connector outside Trello. Open a Trello board where this Power‑Up is enabled to see the buttons.
+        </p>
+        <p class="mono"><small>Origin: <span id="origin"></span></small></p>
       </div>
     </div>
     <script>
+      document.getElementById('origin').textContent = location.origin;
+      // Heuristic: if the page is top-level, we're likely outside Trello
+      if (window.top === window.self) {
+        document.getElementById('outsideHint').style.display = 'block';
+      }
       const Promise = window.TrelloPowerUp.Promise;
+      // Provide appKey + appName to satisfy API usage requirements.
+      // If you've already generated your API key at https://trello.com/app-key,
+      // set it here or keep using the one stored by sum.html in localStorage.
+      const storedKey = (function(){ try { return localStorage.getItem('trello_key') || ''; } catch(e) { return ''; } })();
+      const appKey = storedKey || 'YOUR_APP_KEY_HERE';
       TrelloPowerUp.initialize({
         'board-buttons': function(t, opts) {
           return [
             {
               text: 'My Popup',
-              icon: 'https://raw.githubusercontent.com/simple-icons/simple-icons/develop/icons/trello.svg',
               callback: function(t) {
                 return t.popup({
                   title: 'Hello from your Power‑Up',
@@ -37,7 +52,6 @@
             },
             {
               text: 'Sum > Numbers',
-              icon: 'https://raw.githubusercontent.com/simple-icons/simple-icons/develop/icons/calcite.svg',
               callback: function(t) {
                 return t.popup({
                   title: 'Sum numbers after >',
@@ -53,6 +67,7 @@
         }
       }, {
         appName: 'My Private Power‑Up',
+        appKey: appKey
       });
     </script>
   </body>
