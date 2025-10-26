@@ -1,0 +1,168 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Trello Power‑Up: Sum &gt; Numbers</title>
+    <script src="https://p.trellocdn.com/power-up.min.js"></script>
+    <style>
+      :root { --pad: 12px; }
+      body { margin: 0; font: 14px/1.4 system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+      .wrap { padding: var(--pad); }
+      .row { display:flex; gap: 8px; align-items:center; margin-bottom: 8px; flex-wrap: wrap; }
+      input[type=text] { flex: 1 1 180px; padding: 6px 8px; border: 1px solid #ccc; border-radius: 6px; }
+      button { padding: 6px 10px; border: 0; border-radius: 6px; cursor: pointer; }
+      .muted { color: #666; }
+      table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+      th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid #eee; }
+      .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+      .totals { margin-top: 10px; font-weight: 600; }
+      .err { color: #b00020; }
+      .ok { color: #0a7a32; }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="row">
+        <label class="muted">API key:</label>
+        <input id="key" type="text" placeholder="trello API key"/>
+        <label class="muted">Token:</label>
+        <input id="token" type="text" placeholder="trello token (read)"/>
+        <button id="save">Save</button>
+        <button id="run">Run</button>
+      </div>
+      <div id="status" class="muted">Enter your Trello API key & token (read access).</div>
+      <div id="result"></div>
+    </div>
+
+    <script>
+      const t = TrelloPowerUp.iframe();
+
+      // Load stored creds from board-private storage, else localStorage fallback.
+      async function loadCreds() {
+        const stored = await t.get('board', 'private', 'trelloAuth');
+        if (stored && stored.key && stored.token) return stored;
+        try {
+          const k = localStorage.getItem('trello_key');
+          const tok = localStorage.getItem('trello_token');
+          if (k && tok) return { key: k, token: tok };
+        } catch {}
+        return { key: '', token: '' };
+      }
+
+      async function saveCreds(key, token) {
+        await t.set('board', 'private', 'trelloAuth', { key, token });
+        try {
+          localStorage.setItem('trello_key', key);
+          localStorage.setItem('trello_token', token);
+        } catch {}
+      }
+
+      function parseNumbersAfterGt(text) {
+        if (!text) return [];
+        const re = />\s*(-?\d+(?:\.\d+)?)/g; // matches > 123 or >-5.5
+        const out = [];
+        let m;
+        while ((m = re.exec(text)) !== null) {
+          const v = parseFloat(m[1]);
+          if (!Number.isNaN(v)) out.push(v);
+        }
+        return out;
+      }
+
+      async function fetchJSON(url) {
+        const res = await fetch(url);
+        if (!res.ok) {
+          const txt = await res.text().catch(()=>'');
+          throw new Error('HTTP ' + res.status + ' — ' + txt);
+        }
+        return res.json();
+      }
+
+      async function run() {
+        const status = document.getElementById('status');
+        const result = document.getElementById('result');
+        result.innerHTML = '';
+        status.textContent = 'Fetching…';
+        try {
+          const ctx = await t.getContext();
+          const boardId = ctx.board;
+          const creds = await loadCreds();
+          const key = document.getElementById('key').value || creds.key;
+          const token = document.getElementById('token').value || creds.token;
+          if (!key || !token) {
+            status.innerHTML = '<span class="err">Missing key/token. Provide your Trello API credentials.</span>';
+            return;
+          }
+          // Persist for next time
+          await saveCreds(key, token);
+
+          // Fetch lists to map id -> name
+          const lists = await fetchJSON(`https://api.trello.com/1/boards/${boardId}/lists?fields=name&key=${key}&token=${token}`);
+          const listNameById = Object.fromEntries(lists.map(l => [l.id, l.name]));
+
+          // Fetch all cards (name, desc, list)
+          const cards = await fetchJSON(`https://api.trello.com/1/boards/${boardId}/cards?fields=name,desc,idList,url&limit=1000&key=${key}&token=${token}`);
+
+          let grand = 0;
+          const perList = new Map();
+          const rows = [];
+
+          for (const c of cards) {
+            const nums = [
+              ...parseNumbersAfterGt(c.name),
+              ...parseNumbersAfterGt(c.desc)
+            ];
+            if (nums.length > 0) {
+              const sum = nums.reduce((a,b)=>a+b,0);
+              grand += sum;
+              const listName = listNameById[c.idList] || '(Unknown)';
+              perList.set(listName, (perList.get(listName) || 0) + sum);
+              rows.push({ listName, card: c.name, url: c.url, values: nums, sum });
+            }
+          }
+
+          // Render results
+          const tbl = document.createElement('table');
+          tbl.innerHTML = '<thead><tr><th>List</th><th>Card</th><th class="mono">Values</th><th class="mono">Card Sum</th></tr></thead>';
+          const tb = document.createElement('tbody');
+          for (const r of rows) {
+            const tr = document.createElement('tr');
+            const vals = r.values.map(v => (Number.isInteger(v)? v : v.toFixed(2))).join(', ');
+            tr.innerHTML = `<td>${r.listName}</td><td><a href="${r.url}" target="_blank" rel="noopener">${r.card.replace(/</g,'&lt;')}</a></td><td class="mono">&gt; ${vals}</td><td class="mono">${r.sum.toFixed(2)}</td>`;
+            tb.appendChild(tr);
+          }
+          tbl.appendChild(tb);
+          result.appendChild(tbl);
+
+          // Totals
+          const totals = document.createElement('div');
+          totals.className = 'totals';
+          const listLines = [...perList.entries()].map(([ln, s]) => `${ln}: <span class="mono">${s.toFixed(2)}</span>`).join(' • ');
+          totals.innerHTML = `<div class="ok">Grand Total: <span class="mono">${grand.toFixed(2)}</span></div><div class="muted">By list — ${listLines || 'No matches found.'}</div>`;
+          result.appendChild(totals);
+
+          status.textContent = 'Done.';
+        } catch (err) {
+          document.getElementById('status').innerHTML = '<span class="err">' + (err && err.message ? err.message : err) + '</span>';
+        }
+      }
+
+      // Wire up UI
+      (async () => {
+        const creds = await loadCreds();
+        document.getElementById('key').value = creds.key || '';
+        document.getElementById('token').value = creds.token || '';
+      })();
+
+      document.getElementById('save').addEventListener('click', async () => {
+        const key = document.getElementById('key').value.trim();
+        const token = document.getElementById('token').value.trim();
+        await saveCreds(key, token);
+        document.getElementById('status').textContent = 'Saved.';
+      });
+
+      document.getElementById('run').addEventListener('click', run);
+    </script>
+  </body>
+</html>

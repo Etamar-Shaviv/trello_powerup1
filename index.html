@@ -16,25 +16,37 @@
     <div class="wrap">
       <div class="hint">
         <h1>🔌 Trello Power‑Up — Connected</h1>
-        <p>If you see this inside a browser tab, that's okay — Trello loads this page in an iframe.<br/>
-        Capabilities are registered via <code>TrelloPowerUp.initialize</code> below.</p>
+        <p>This page registers capabilities via <code>TrelloPowerUp.initialize</code>.</p>
       </div>
     </div>
     <script>
       const Promise = window.TrelloPowerUp.Promise;
       TrelloPowerUp.initialize({
         'board-buttons': function(t, opts) {
-          return [{
-            text: 'My Popup',
-            icon: 'https://raw.githubusercontent.com/simple-icons/simple-icons/develop/icons/trello.svg',
-            callback: function(t) {
-              return t.popup({
-                title: 'Hello from your Power‑Up',
-                url: './popup.html',
-                height: 120
-              });
+          return [
+            {
+              text: 'My Popup',
+              icon: 'https://raw.githubusercontent.com/simple-icons/simple-icons/develop/icons/trello.svg',
+              callback: function(t) {
+                return t.popup({
+                  title: 'Hello from your Power‑Up',
+                  url: './popup.html',
+                  height: 120
+                });
+              }
+            },
+            {
+              text: 'Sum > Numbers',
+              icon: 'https://raw.githubusercontent.com/simple-icons/simple-icons/develop/icons/calcite.svg',
+              callback: function(t) {
+                return t.popup({
+                  title: 'Sum numbers after >',
+                  url: './sum.html',
+                  height: 420
+                });
+              }
             }
-          }];
+          ];
         },
         'show-settings': function(t) {
           return t.popup({ title: 'Settings', url: './popup.html', height: 160 });
